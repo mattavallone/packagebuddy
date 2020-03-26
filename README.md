@@ -1,1 +1,1 @@
-# packagebuddy
+# Package Buddy

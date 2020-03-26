@@ -27,6 +27,8 @@ The main application of Package Buddy would be in the logistics and transportati
 Package Buddy seeks to solve these issues and improve the way parcels are delivered in the future.  The vision is for a delivery person to unload a fleet of these robots from a delivery truck, each with a payload to transport.  They will be programmed with the desired rooms to bring the packages to inside the building, and autonomously navigate in an efficient manner to successfully deliver them.
 
 ## Hardware
+The following components are used in the development of Package Buddy.
+
 * iRobot Create 2 Robot
 * NVIDIA Jetson TX2 Development Kit
 * Intel Realsense D435i Camera
@@ -41,7 +43,7 @@ Package Buddy seeks to solve these issues and improve the way parcels are delive
 ## Software
 Robot Operating System (ROS) is used to integrate the software. ROS is an open-source collection of tools, libraries, and conventions that aim to simplify the task of creating complex and robust robot behavior.  It serves as a framework for developing robot software that is easily maintainable, scalable, and extendable for many different types of applications.
 
-### ROS Packages Used
+#### ROS Packages Used
 Set up a catkin workspace with the following packages. Update the launch file for packagebuddy accordingly.
 
 * create_autonomy

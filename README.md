@@ -34,6 +34,7 @@ Package Buddy seeks to solve these issues and improve the way parcels are delive
 * Arduino Uno
 * HC-SR04 Ultrasonic Range Sensors
 * Servo Motors SG90
+* 2W 8 Ohm Magnet Speaker
 * 4 Port USB Hub
 * 3D Printed Camera Mount
 

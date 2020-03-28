@@ -1,1 +1,0 @@
-Reference images of classes for few-shot object detection go here

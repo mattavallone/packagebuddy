@@ -9,6 +9,11 @@ project(packagebuddy)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   rospy
+  sensor_msgs
+  geometry_msgs
+  std_msgs
+  vision_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -65,10 +70,13 @@ add_service_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs  # Or other packages containing msgs
-# )
+ generate_messages(
+   DEPENDENCIES
+   sensor_msgs
+   std_msgs
+   vision_msgs
+   geometry_msgs
+ )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

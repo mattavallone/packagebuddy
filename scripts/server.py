@@ -6,12 +6,13 @@ from __future__ import print_function
 
 import os
 import sys
+from collections import OrderedDict
 from packagebuddy.srv import *
 import rospy
 from copy import deepcopy
 
-MASK_RCNN_MODEL_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese-mask-rcnn/lib/Mask_RCNN/'
-PROJECT_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese-mask-rcnn/'
+MASK_RCNN_MODEL_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/lib/Mask_RCNN/'
+PROJECT_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/'
 
 if(MASK_RCNN_MODEL_PATH not in sys.path):
 	sys.path.append(MASK_RCNN_MODEL_PATH)
@@ -33,9 +34,13 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
+import warnings
+warnings.filterwarnings("ignore")
+
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
 
 # Configure the model
 class SmallEvalConfig(siamese_config.Config):
@@ -46,7 +51,7 @@ class SmallEvalConfig(siamese_config.Config):
 	NUM_CLASSES = 1 + 1
 	NAME = 'coco'
 	EXPERIMENT = 'evaluation'
-	CHECKPOINT_DIR = '../checkpoints/'
+	CHECKPOINT_DIR = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/'
 	NUM_TARGETS = 1
 	
 class LargeEvalConfig(siamese_config.Config):
@@ -57,7 +62,7 @@ class LargeEvalConfig(siamese_config.Config):
 	NUM_CLASSES = 1 + 1
 	NAME = 'coco'
 	EXPERIMENT = 'evaluation'
-	CHECKPOINT_DIR = '../checkpoints/'
+	CHECKPOINT_DIR = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/'
 	NUM_TARGETS = 1
 	
 	# Large image sizes
@@ -101,10 +106,14 @@ class SiameseMaskRCNNServer(object):
 		
 		# Load checkpoint weights
 		if self.model_size == 'small':
-			checkpoint = 'checkpoints/small_siamese_mrcnn_0160.h5'
+			checkpoint = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/small_siamese_mrcnn_0160.h5'
 		elif self.model_size == 'large':
-			checkpoint = 'checkpoints/large_siamese_mrcnn_coco_full_0320.h5'
-			
+			checkpoint = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/large_siamese_mrcnn_coco_full_0320.h5'
+		
+
+		# Directory to save logs and trained model
+		MODEL_DIR = os.path.join(PROJECT_PATH, "logs")
+
 		# Initialize model
 		self.siameseMaskRCNN = siamese_model.SiameseMaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
 
@@ -113,7 +122,7 @@ class SiameseMaskRCNNServer(object):
 
 		rospy.loginfo('siameseMaskRCNN detector ready...')
 
-		s = rospy.Service('siameseMaskRCNN_detect', ObjectDetect, self._handle_siameseMaskRCNN_detect, buff_size=10000000)
+		s = rospy.Service('siameseMaskRCNN_detect', objectDetect, self._handle_siameseMaskRCNN_detect, buff_size=10000000)
 
 		s.spin()
 

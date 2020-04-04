@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="packagebuddy" name="siameseMaskRCNN_server" type="server.py" output="screen">
+        <param name="model_size" type="str" value="small" />
+    </node>
+</launch>

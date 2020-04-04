@@ -1,6 +1,14 @@
 <launch>
- <node pkg="packagebuddy" type="test.py" name="packagebuddy_node" output="screen" />
+
+ <node pkg="packagebuddy" type="predict.py" name="siameseMaskRCNN_predict" output="screen" />
+
  <node pkg="cv_camera" type="cv_camera_node.cpp" name="cv_camera_node" output="screen" />
- <include file="/home/osboxes/catkin_ws/src/create_autonomy/ca_driver/launch/create_2.launch" />
- <include file="/home/osboxes/catkin_ws/src/realsense-ros/realsense2_camera/launch/rs_camera.launch" />
+
+<!--
+ <include file="$(find ca_driver)/launch/create_2.launch" />
+ <include file="$(find realsense2_camera)/launch/rs_camera.launch" />
+-->
+
+ <include file="$(find packagebuddy)/launch/include/siameseMaskRCNN_server.launch" />
+
 </launch>

@@ -148,7 +148,7 @@ class SiameseMaskRCNNServer(object):
 			targets = []
 			prev_images = []
 			for category in self.categories:
-				for i in range(k):
+				for i in range(self.k):
 					image_id = np.random.choice(coco_val.category_image_index[category]) 
 
 					if image_id not in prev_images:  

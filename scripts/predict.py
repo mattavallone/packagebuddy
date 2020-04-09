@@ -50,8 +50,8 @@ class SiameseMaskRCNN(object):
 			if cur_img.header.stamp != last_image.header.stamp:
 				rospy.wait_for_service('siameseMaskRCNN_detect')
 				try:
-					siameseMaskRCNN_detect = rospy.ServiceProxy('siameseMaskRCNN_detect', ObjectDetect, persistent=True)
-					detected = siameseMaskRCNN_detect(ObjectDetectRequest(cur_img)).detection
+					siameseMaskRCNN_detect = rospy.ServiceProxy('siameseMaskRCNN_detect', objectDetect, persistent=True)
+					detected = siameseMaskRCNN_detect(objectDetectRequest(cur_img)).detection
 					
 					try:
 						cv_image = self.bridge.imgmsg_to_cv2(cur_img, "bgr8")

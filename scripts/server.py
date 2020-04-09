@@ -87,11 +87,15 @@ class SiameseMaskRCNNServer(object):
 	def __init__(self):
 		self.bridge = CvBridge()
 		self.model_size = rospy.get_param('~model_size', default='small') # Options are either 'small' or 'large'
+		self.categories = [1, 2, 3, 4, 5, 6] # six classes
+		self.k = 5 # 5-shot learning
 
 		if self.model_size == 'small':
 			config = SmallEvalConfig()
 		elif model_size == 'large':
 			config = LargeEvalConfig()
+		
+		config.NUM_TARGETS = self.k
 
 		# Training schedule needed for evaluating	
 		train_schedule = OrderedDict()
@@ -137,12 +141,30 @@ class SiameseMaskRCNNServer(object):
 		except CvBridgeError as e:
 			rospy.logerr(e)
 		try:
-			results = self.siameseMaskRCNN.detect([[target]], [image], verbose=1)
-			# STOPPED HERE, get boxes etc.
+			# for ref_img in os.listdir(REFERENCE_IMAGES_PATH):
+			# 	target = cv2.imread(ref_img)
+
+			# Select category			
+			targets = []
+			prev_images = []
+			for category in self.categories:
+				for i in range(k):
+					image_id = np.random.choice(coco_val.category_image_index[category]) 
+
+					if image_id not in prev_images:  
+						# Load target
+						target = siamese_utils.get_one_target(category, coco_val, config)
+						targets.append(target)
+			
+			# Alternative for hand-selected reference images
+			# targets = os.listdir(REFERENCE_IMAGES_PATH)
+				
+			outputs = self.siameseMaskRCNN.detect([targets], [cv_image], verbose=1)
+
 		except SystemError:
 			pass
 		# rospy.loginfo('Found {} boxes'.format(len(boxes)))
-		for box in boxes:
+		for output in outputs:
 			detection = Detection2D()
 			results = []
 			bbox = BoundingBox2D()
@@ -152,22 +174,23 @@ class SiameseMaskRCNNServer(object):
 			detection.header.stamp = rospy.get_rostime()
 			# detection.source_img = deepcopy(req.image)
 
-			labels = box.get_all_labels()
+			scores = output['final_scores']
+			labels = output['class_ids']
 			for i in range(0,len(labels)):
 				object_hypothesis = ObjectHypothesisWithPose()
-				object_hypothesis.id = i
-				object_hypothesis.score = labels[i]
+				object_hypothesis.id = labels[i]
+				object_hypothesis.score = scores[i]
 				results.append(object_hypothesis)
 			
 			detection.results = results
 
-			x, y = box.get_xy_center()
+			x, y = output['rois'].get_xy_center()
 			center.x = x
 			center.y = y
 			center.theta = 0.0
 			bbox.center = center
 
-			size_x, size_y = box.get_xy_extents()
+			size_x, size_y = output['rois'].get_xy_extents()
 			bbox.size_x = size_x
 			bbox.size_y = size_y
 

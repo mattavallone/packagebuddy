@@ -10,9 +10,11 @@ from collections import OrderedDict
 from packagebuddy.srv import *
 import rospy
 from copy import deepcopy
+import numpy as np
 
 MASK_RCNN_MODEL_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/lib/Mask_RCNN/'
 PROJECT_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/'
+SUPPORT_SET = '/home/osboxes/catkin_ws/src/packagebuddy/images/reference-images/'
 
 if(MASK_RCNN_MODEL_PATH not in sys.path):
 	sys.path.append(MASK_RCNN_MODEL_PATH)
@@ -87,8 +89,8 @@ class SiameseMaskRCNNServer(object):
 	def __init__(self):
 		self.bridge = CvBridge()
 		self.model_size = rospy.get_param('~model_size', default='small') # Options are either 'small' or 'large'
-		self.categories = [1, 2, 3, 4, 5, 6] # six classes
-		self.k = 5 # 5-shot learning
+		self.categories = ['chair', 'couch', 'desk', 'door', 'elevator', 'person'] # six classes
+		self.k = rospy.get_param('~shot', default=5) # k-shot learning
 
 		if self.model_size == 'small':
 			config = SmallEvalConfig()
@@ -141,29 +143,14 @@ class SiameseMaskRCNNServer(object):
 		except CvBridgeError as e:
 			rospy.logerr(e)
 		try:
-			# for ref_img in os.listdir(REFERENCE_IMAGES_PATH):
-			# 	target = cv2.imread(ref_img)
-
-			# Select category			
-			targets = []
-			prev_images = []
-			for category in self.categories:
-				for i in range(self.k):
-					image_id = np.random.choice(coco_val.category_image_index[category]) 
-
-					if image_id not in prev_images:  
-						# Load target
-						target = siamese_utils.get_one_target(category, coco_val, config)
-						targets.append(target)
-			
-			# Alternative for hand-selected reference images
-			# targets = os.listdir(REFERENCE_IMAGES_PATH)
-				
-			outputs = self.siameseMaskRCNN.detect([targets], [cv_image], verbose=1)
+			# category = np.random.choice(self.categories, 1) # choose a class randomly
+			category = self.categories[3] # door
+			ref_images = np.random.choice(os.listdir(REFERENCE_IMAGES_PATH + category), self.k) # use k reference images	
+			outputs = self.siameseMaskRCNN.detect([ref_images], [cv_image], verbose=1)
 
 		except SystemError:
 			pass
-		# rospy.loginfo('Found {} boxes'.format(len(boxes)))
+		# rospy.loginfo('Found {} boxes'.format(len(outputs)))
 		for output in outputs:
 			detection = Detection2D()
 			results = []

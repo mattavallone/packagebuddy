@@ -11,8 +11,8 @@ Package Buddy is a project team at New York University. The goal of the project 
 | **4**.   Find elevators and enter and exit them on the correct floor |
 | **5**.   Collaborate with other robots in the area |
 
-## Goals
-There are several goals for the project, each building upon the prior with greater complexity. On the most basic level, the robot will be able to traverse a single floor to deliver a package, while avoiding stationary objects. Once it is able to achieve that, we will add dynamically moving objects for the robot to avoid colliding with. After that, we will have the robot deliver a package on a different floor using an elevator. The final goal is to have multiple robots operating simultaneously and communicating with each other.
+## Milestones
+There are several milestones for the project, each building upon the prior with greater complexity. On the most basic level, the robot will be able to traverse a single floor to deliver a package, while avoiding stationary objects. Once it is able to achieve that, we will add dynamically moving objects for the robot to avoid colliding with. After that, we will have the robot deliver a package on a different floor using an elevator. The final goal is to have multiple robots operating simultaneously and communicating with each other.
 
 | Number of Robots	| Objects	| Number of Floors|
 |:-------------------:|:---------:|:-----------------:|

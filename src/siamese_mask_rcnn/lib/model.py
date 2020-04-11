@@ -30,6 +30,9 @@ from mrcnn import visualize
 
 from lib import utils as siamese_utils
 
+import warnings
+warnings.filterwarnings("ignore")
+
 def fullmatch(regex, string, flags=0):
     """Emulate python-3.4 re.fullmatch()."""
     return re.match("(?:" + regex + r")\Z", string, flags=flags)
@@ -225,6 +228,8 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
     """Encapsulates the Mask RCNN model functionality.
     The actual Keras model is in the keras_model property.
     """
+    global graph
+    graph = tf.get_default_graph()
 
     def build(self, mode, config):
         """Build Mask R-CNN architecture.
@@ -766,8 +771,9 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
             modellib.log("anchors", anchors)
         # Run object detection
         # CHANGE: Use siamese detection model
-        detections, _, _, mrcnn_mask, _, _, _ =\
-            self.keras_model.predict([molded_images, image_metas, molded_targets, anchors], verbose=0)
+        with graph.as_default():
+            detections, _, _, mrcnn_mask, _, _, _ =\
+                self.keras_model.predict([molded_images, image_metas, molded_targets, anchors], verbose=0)
         if random_detections:
             # Randomly shift the detected boxes
             window_limits = utils.norm_boxes(windows, (molded_images[0].shape[:2]))[0]

@@ -11,6 +11,7 @@ from packagebuddy.srv import *
 import rospy
 from copy import deepcopy
 import numpy as np
+import cv2
 
 MASK_RCNN_MODEL_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/lib/Mask_RCNN/'
 PROJECT_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/'
@@ -55,7 +56,13 @@ class SmallEvalConfig(siamese_config.Config):
 	EXPERIMENT = 'evaluation'
 	CHECKPOINT_DIR = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/'
 	NUM_TARGETS = 1
-	
+
+	# TARGET_MAX_DIM = 192
+	# TARGET_MIN_DIM = 150
+	# IMAGE_MIN_SCALE = 1
+	# IMAGE_MIN_DIM = 480
+	# IMAGE_MAX_DIM = 640
+
 class LargeEvalConfig(siamese_config.Config):
 	# Set batch size to 1 since we'll be running inference on
 	# one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
@@ -93,22 +100,22 @@ class SiameseMaskRCNNServer(object):
 		self.k = rospy.get_param('~shot', default=5) # k-shot learning
 
 		if self.model_size == 'small':
-			config = SmallEvalConfig()
+			self.config = SmallEvalConfig()
 		elif model_size == 'large':
-			config = LargeEvalConfig()
+			self.config = LargeEvalConfig()
 		
-		config.NUM_TARGETS = self.k
+		self.config.NUM_TARGETS = self.k
 
 		# Training schedule needed for evaluating	
 		train_schedule = OrderedDict()
 		if self.model_size == 'small':
-			train_schedule[1] = {"learning_rate": config.LEARNING_RATE, "layers": "heads"}
-			train_schedule[120] = {"learning_rate": config.LEARNING_RATE, "layers": "4+"}
-			train_schedule[160] = {"learning_rate": config.LEARNING_RATE/10, "layers": "all"}
+			train_schedule[1] = {"learning_rate": self.config.LEARNING_RATE, "layers": "heads"}
+			train_schedule[120] = {"learning_rate": self.config.LEARNING_RATE, "layers": "4+"}
+			train_schedule[160] = {"learning_rate": self.config.LEARNING_RATE/10, "layers": "all"}
 		elif self.model_size == 'large':
-			train_schedule[1] = {"learning_rate": config.LEARNING_RATE, "layers": "heads"}
-			train_schedule[240] = {"learning_rate": config.LEARNING_RATE, "layers": "all"}
-			train_schedule[320] = {"learning_rate": config.LEARNING_RATE/10, "layers": "all"} 
+			train_schedule[1] = {"learning_rate": self.config.LEARNING_RATE, "layers": "heads"}
+			train_schedule[240] = {"learning_rate": self.config.LEARNING_RATE, "layers": "all"}
+			train_schedule[320] = {"learning_rate": self.config.LEARNING_RATE/10, "layers": "all"} 
 		
 		# Load checkpoint weights
 		if self.model_size == 'small':
@@ -121,12 +128,12 @@ class SiameseMaskRCNNServer(object):
 		MODEL_DIR = os.path.join(PROJECT_PATH, "logs")
 
 		# Initialize model
-		self.siameseMaskRCNN = siamese_model.SiameseMaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+		self.siameseMaskRCNN = siamese_model.SiameseMaskRCNN(mode="inference", model_dir=MODEL_DIR, config=self.config)
 
 		self.siameseMaskRCNN.load_checkpoint(checkpoint, training_schedule=train_schedule)
 
 
-		rospy.loginfo('siameseMaskRCNN detector ready...')
+		rospy.loginfo('Siamese Mask R-CNN detector ready...')
 
 		s = rospy.Service('siameseMaskRCNN_detect', objectDetect, self._handle_siameseMaskRCNN_detect, buff_size=10000000)
 
@@ -145,7 +152,16 @@ class SiameseMaskRCNNServer(object):
 		try:
 			# category = np.random.choice(self.categories, 1) # choose a class randomly
 			category = self.categories[3] # door
-			ref_images = np.random.choice(os.listdir(REFERENCE_IMAGES_PATH + category), self.k) # use k reference images	
+			ref_image_list = np.random.choice(os.listdir(SUPPORT_SET + category), self.k) # use k reference images
+			# ref_image_list = os.listdir(SUPPORT_SET + category)[:self.k-1]
+			ref_images = []
+			for i, img in enumerate(ref_image_list):
+				# load reference images
+				ref_images.append(cv2.imread(SUPPORT_SET + category + '/' + img))
+
+				# resize them to correct dimensions for model
+				ref_images[i], window, scale, padding, crop = utils.resize_image(ref_images[i], min_dim=self.config.TARGET_MIN_DIM, max_dim=self.config.TARGET_MAX_DIM, min_scale=self.config.IMAGE_MIN_SCALE, mode="square")
+				
 			outputs = self.siameseMaskRCNN.detect([ref_images], [cv_image], verbose=1)
 
 		except SystemError:
@@ -161,7 +177,7 @@ class SiameseMaskRCNNServer(object):
 			detection.header.stamp = rospy.get_rostime()
 			# detection.source_img = deepcopy(req.image)
 
-			scores = output['final_scores']
+			scores = output['scores']
 			labels = output['class_ids']
 			for i in range(0,len(labels)):
 				object_hypothesis = ObjectHypothesisWithPose()

@@ -433,7 +433,6 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
     scale = 1
     padding = [(0, 0), (0, 0), (0, 0)]
     crop = None
-
     if mode == "none":
         return image, window, scale, padding, crop
 
@@ -446,7 +445,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
 
     # Does it exceed max dim?
     if max_dim and mode == "square":
-        image_max = max(h, w)
+        image_max = max(h, w) * 1.0
         if round(image_max * scale) > max_dim:
             scale = max_dim / image_max
 

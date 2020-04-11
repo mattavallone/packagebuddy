@@ -166,7 +166,9 @@ class SiameseMaskRCNNServer(object):
 
 		except SystemError:
 			pass
-		# rospy.loginfo('Found {} boxes'.format(len(outputs)))
+		
+		rospy.loginfo('Found {} objects'.format(len(outputs)))
+		
 		for output in outputs:
 			detection = Detection2D()
 			results = []
@@ -187,15 +189,14 @@ class SiameseMaskRCNNServer(object):
 			
 			detection.results = results
 
-			x, y = output['rois'].get_xy_center()
-			center.x = x
-			center.y = y
+			y1, x1, y2, x2 = output['rois']
+			center.x = (x2 + x1) / 2
+			center.y = (y2 + y1) / 2
 			center.theta = 0.0
 			bbox.center = center
 
-			size_x, size_y = output['rois'].get_xy_extents()
-			bbox.size_x = size_x
-			bbox.size_y = size_y
+			bbox.size_x = abs(x2 - x1)
+			bbox.size_y = abs(y2 - y1)
 
 			detection.bbox = bbox
 

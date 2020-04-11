@@ -4,6 +4,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import os
 import sys
 from collections import OrderedDict
@@ -37,13 +40,10 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
-import warnings
-warnings.filterwarnings("ignore")
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-
 
 # Configure the model
 class SmallEvalConfig(siamese_config.Config):
@@ -54,7 +54,7 @@ class SmallEvalConfig(siamese_config.Config):
 	NUM_CLASSES = 1 + 1
 	NAME = 'coco'
 	EXPERIMENT = 'evaluation'
-	CHECKPOINT_DIR = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/'
+	CHECKPOINT_DIR = PROJECT_PATH + 'checkpoints/'
 	NUM_TARGETS = 1
 
 	# TARGET_MAX_DIM = 192
@@ -71,7 +71,7 @@ class LargeEvalConfig(siamese_config.Config):
 	NUM_CLASSES = 1 + 1
 	NAME = 'coco'
 	EXPERIMENT = 'evaluation'
-	CHECKPOINT_DIR = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/'
+	CHECKPOINT_DIR = PROJECT_PATH + 'checkpoints/'
 	NUM_TARGETS = 1
 	
 	# Large image sizes
@@ -119,9 +119,9 @@ class SiameseMaskRCNNServer(object):
 		
 		# Load checkpoint weights
 		if self.model_size == 'small':
-			checkpoint = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/small_siamese_mrcnn_0160.h5'
+			checkpoint = PROJECT_PATH + 'checkpoints/small_siamese_mrcnn_0160.h5'
 		elif self.model_size == 'large':
-			checkpoint = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/checkpoints/large_siamese_mrcnn_coco_full_0320.h5'
+			checkpoint = PROJECT_PATH + 'checkpoints/large_siamese_mrcnn_coco_full_0320.h5'
 		
 
 		# Directory to save logs and trained model

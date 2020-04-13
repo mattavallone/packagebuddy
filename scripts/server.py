@@ -19,6 +19,7 @@ import cv2
 MASK_RCNN_MODEL_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/lib/Mask_RCNN/'
 PROJECT_PATH = '/home/osboxes/catkin_ws/src/packagebuddy/src/siamese_mask_rcnn/'
 SUPPORT_SET = '/home/osboxes/catkin_ws/src/packagebuddy/images/reference-images/'
+QUERY_SET = '/home/osboxes/catkin_ws/src/packagebuddy/images/query-images/'
 
 if(MASK_RCNN_MODEL_PATH not in sys.path):
 	sys.path.append(MASK_RCNN_MODEL_PATH)
@@ -95,13 +96,13 @@ class LargeEvalConfig(siamese_config.Config):
 class SiameseMaskRCNNServer(object):
 	def __init__(self):
 		self.bridge = CvBridge()
-		self.model_size = rospy.get_param('~model_size', default='small') # Options are either 'small' or 'large'
+		self.model_size = rospy.get_param('~model_size', default='large') # Options are either 'small' or 'large'
 		self.categories = ['chair', 'couch', 'desk', 'door', 'elevator', 'person'] # six classes
 		self.k = rospy.get_param('~shot', default=5) # k-shot learning
 
 		if self.model_size == 'small':
 			self.config = SmallEvalConfig()
-		elif model_size == 'large':
+		elif self.model_size == 'large':
 			self.config = LargeEvalConfig()
 		
 		self.config.NUM_TARGETS = self.k
@@ -145,22 +146,29 @@ class SiameseMaskRCNNServer(object):
 		detections = []
 		boxes = None
 		
+		# Read in image
 		try:
 			cv_image = self.bridge.imgmsg_to_cv2(req.image, "bgr8")
 		except CvBridgeError as e:
 			rospy.logerr(e)
+
+		# Perform inferencing
 		try:
 			# category = np.random.choice(self.categories, 1) # choose a class randomly
 			category = self.categories[3] # door
-			ref_image_list = np.random.choice(os.listdir(SUPPORT_SET + category), self.k) # use k reference images
-			# ref_image_list = os.listdir(SUPPORT_SET + category)[:self.k-1]
+			ref_image_list = np.random.choice(os.listdir(SUPPORT_SET + category), self.k) # use random k reference images
+			# ref_image_list = os.listdir(SUPPORT_SET + category)[:self.k-1] # use first k reference images
 			ref_images = []
 			for i, img in enumerate(ref_image_list):
 				# load reference images
 				ref_images.append(cv2.imread(SUPPORT_SET + category + '/' + img))
 
 				# resize them to correct dimensions for model
-				ref_images[i], window, scale, padding, crop = utils.resize_image(ref_images[i], min_dim=self.config.TARGET_MIN_DIM, max_dim=self.config.TARGET_MAX_DIM, min_scale=self.config.IMAGE_MIN_SCALE, mode="square")
+				ref_images[i], window, scale, padding, crop = utils.resize_image(ref_images[i], 
+																				min_dim=self.config.TARGET_MIN_DIM, 
+																				max_dim=self.config.TARGET_MAX_DIM, 
+																				min_scale=self.config.IMAGE_MIN_SCALE, 
+																				mode="square")
 				
 			outputs = self.siameseMaskRCNN.detect([ref_images], [cv_image], verbose=1)
 
@@ -169,7 +177,9 @@ class SiameseMaskRCNNServer(object):
 		
 		rospy.loginfo('Found {} objects'.format(len(outputs)))
 		
+		# Create output message
 		for output in outputs:
+			print(output)
 			detection = Detection2D()
 			results = []
 			bbox = BoundingBox2D()
@@ -181,6 +191,7 @@ class SiameseMaskRCNNServer(object):
 
 			scores = output['scores']
 			labels = output['class_ids']
+
 			for i in range(0,len(labels)):
 				object_hypothesis = ObjectHypothesisWithPose()
 				object_hypothesis.id = labels[i]

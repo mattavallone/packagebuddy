@@ -228,9 +228,14 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
     """Encapsulates the Mask RCNN model functionality.
     The actual Keras model is in the keras_model property.
     """
-    global graph
-    graph = tf.get_default_graph()
-
+    K.clear_session()
+    global session
+    session = K.get_session()
+    # global graph
+    # graph = session.graph
+    # global session
+    # session = tf.Session(graph=tf.Graph())
+    # graph = tf.compat.v1.get_default_graph()
     def build(self, mode, config):
         """Build Mask R-CNN architecture.
             input_shape: The shape of the input image.
@@ -369,122 +374,125 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
             nms_threshold=config.RPN_NMS_THRESHOLD,
             name="ROI",
             config=config)([rpn_class, rpn_bbox, anchors])
+        
+        with session.graph.as_default():
+            # with session.as_default():
+            K.set_session(session)
+            if mode == "training":
+                # Class ID mask to mark class IDs supported by the dataset the image
+                # came from.
+                active_class_ids = KL.Lambda(
+                    lambda x: modellib.parse_image_meta_graph(x)["active_class_ids"]
+                    )(input_image_meta)
 
-        if mode == "training":
-            # Class ID mask to mark class IDs supported by the dataset the image
-            # came from.
-            active_class_ids = KL.Lambda(
-                lambda x: modellib.parse_image_meta_graph(x)["active_class_ids"]
-                )(input_image_meta)
+                if not config.USE_RPN_ROIS:
+                    # Ignore predicted ROIs and use ROIs provided as an input.
+                    input_rois = KL.Input(shape=[config.POST_NMS_ROIS_TRAINING, 4],
+                                          name="input_roi", dtype=np.int32)
+                    # Normalize coordinates
+                    target_rois = KL.Lambda(lambda x: modellig.norm_boxes_graph(
+                        x, K.shape(input_image)[1:3]))(input_rois)
+                else:
+                    target_rois = rpn_rois
 
-            if not config.USE_RPN_ROIS:
-                # Ignore predicted ROIs and use ROIs provided as an input.
-                input_rois = KL.Input(shape=[config.POST_NMS_ROIS_TRAINING, 4],
-                                      name="input_roi", dtype=np.int32)
-                # Normalize coordinates
-                target_rois = KL.Lambda(lambda x: modellig.norm_boxes_graph(
-                    x, K.shape(input_image)[1:3]))(input_rois)
+                # Generate detection targets
+                # Subsamples proposals and generates target outputs for training
+                # Note that proposal class IDs, gt_boxes, and gt_masks are zero
+                # padded. Equally, returned rois and targets are zero padded.
+                rois, target_class_ids, target_bbox, target_mask =\
+                    modellib.DetectionTargetLayer(config, name="proposal_targets")([
+                        target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
+
+                # Network Heads
+                # TODO: verify that this handles zero padded ROIs
+                # CHANGE: reduce number of classes to 2
+                # CHANGE: replaced with custom 2 class function
+                mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
+                    fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
+                                         config.POOL_SIZE, num_classes=2,
+                                         train_bn=config.TRAIN_BN,
+                                         fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
+                # CHANGE: reduce number of classes to 2
+                # CHANGE: replaced with custom 2 class function
+                if config.MODEL == 'mrcnn':
+                    mrcnn_mask = fpn_mask_graph(rois, mrcnn_feature_maps,
+                                                      input_image_meta,
+                                                      config.MASK_POOL_SIZE,
+                                                      num_classes=2,
+                                                      train_bn=config.TRAIN_BN)
+
+                # TODO: clean up (use tf.identify if necessary)
+                output_rois = KL.Lambda(lambda x: x * 1, name="output_rois")(rois)
+
+                # Losses
+                rpn_class_loss = KL.Lambda(lambda x: modellib.rpn_class_loss_graph(*x), name="rpn_class_loss")(
+                    [input_rpn_match, rpn_class_logits])
+                rpn_bbox_loss = KL.Lambda(lambda x: modellib.rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
+                    [input_rpn_bbox, input_rpn_match, rpn_bbox])
+                # CHANGE: use custom class loss without using active_class_ids
+                class_loss = KL.Lambda(lambda x: mrcnn_class_loss_graph(*x), name="mrcnn_class_loss")(
+                    [target_class_ids, mrcnn_class_logits, active_class_ids])
+                bbox_loss = KL.Lambda(lambda x: modellib.mrcnn_bbox_loss_graph(*x), name="mrcnn_bbox_loss")(
+                    [target_bbox, target_class_ids, mrcnn_bbox])
+                if config.MODEL == 'mrcnn':
+                    mask_loss = KL.Lambda(lambda x: modellib.mrcnn_mask_loss_graph(*x), name="mrcnn_mask_loss")(
+                        [target_mask, target_class_ids, mrcnn_mask])
+
+                # Model
+                # CHANGE: Added target to inputs
+                inputs = [input_image, input_image_meta, input_target,
+                          input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, input_gt_masks]
+                if not config.USE_RPN_ROIS:
+                    inputs.append(input_rois)
+                if config.MODEL == 'mrcnn':
+                    outputs = [rpn_class_logits, rpn_class, rpn_bbox,
+                               mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
+                               rpn_rois, output_rois,
+                               rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss, mask_loss]
+                elif config.MODEL =='frcnn':
+                    outputs = [rpn_class_logits, rpn_class, rpn_bbox,
+                               mrcnn_class_logits, mrcnn_class, mrcnn_bbox,
+                               rpn_rois, output_rois,
+                               rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss]
+                model = KM.Model(inputs, outputs, name='mask_rcnn')
             else:
-                target_rois = rpn_rois
+                # Network Heads
+                # Proposal classifier and BBox regressor heads
+                # CHANGE: reduce number of classes to 2
+                # CHANGE: replaced with custom 2 class function
+                mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
+                    fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
+                                         config.POOL_SIZE, num_classes=2,
+                                         train_bn=config.TRAIN_BN, 
+                                         fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
 
-            # Generate detection targets
-            # Subsamples proposals and generates target outputs for training
-            # Note that proposal class IDs, gt_boxes, and gt_masks are zero
-            # padded. Equally, returned rois and targets are zero padded.
-            rois, target_class_ids, target_bbox, target_mask =\
-                modellib.DetectionTargetLayer(config, name="proposal_targets")([
-                    target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
+                # Detections
+                # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in 
+                # normalized coordinates
+                detections = modellib.DetectionLayer(config, name="mrcnn_detection")(
+                    [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
 
-            # Network Heads
-            # TODO: verify that this handles zero padded ROIs
-            # CHANGE: reduce number of classes to 2
-            # CHANGE: replaced with custom 2 class function
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
-                fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
-                                     config.POOL_SIZE, num_classes=2,
-                                     train_bn=config.TRAIN_BN,
-                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
-            # CHANGE: reduce number of classes to 2
-            # CHANGE: replaced with custom 2 class function
-            if config.MODEL == 'mrcnn':
-                mrcnn_mask = fpn_mask_graph(rois, mrcnn_feature_maps,
-                                                  input_image_meta,
-                                                  config.MASK_POOL_SIZE,
-                                                  num_classes=2,
-                                                  train_bn=config.TRAIN_BN)
-
-            # TODO: clean up (use tf.identify if necessary)
-            output_rois = KL.Lambda(lambda x: x * 1, name="output_rois")(rois)
-
-            # Losses
-            rpn_class_loss = KL.Lambda(lambda x: modellib.rpn_class_loss_graph(*x), name="rpn_class_loss")(
-                [input_rpn_match, rpn_class_logits])
-            rpn_bbox_loss = KL.Lambda(lambda x: modellib.rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
-                [input_rpn_bbox, input_rpn_match, rpn_bbox])
-            # CHANGE: use custom class loss without using active_class_ids
-            class_loss = KL.Lambda(lambda x: mrcnn_class_loss_graph(*x), name="mrcnn_class_loss")(
-                [target_class_ids, mrcnn_class_logits, active_class_ids])
-            bbox_loss = KL.Lambda(lambda x: modellib.mrcnn_bbox_loss_graph(*x), name="mrcnn_bbox_loss")(
-                [target_bbox, target_class_ids, mrcnn_bbox])
-            if config.MODEL == 'mrcnn':
-                mask_loss = KL.Lambda(lambda x: modellib.mrcnn_mask_loss_graph(*x), name="mrcnn_mask_loss")(
-                    [target_mask, target_class_ids, mrcnn_mask])
-
-            # Model
-            # CHANGE: Added target to inputs
-            inputs = [input_image, input_image_meta, input_target,
-                      input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, input_gt_masks]
-            if not config.USE_RPN_ROIS:
-                inputs.append(input_rois)
-            if config.MODEL == 'mrcnn':
-                outputs = [rpn_class_logits, rpn_class, rpn_bbox,
-                           mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
-                           rpn_rois, output_rois,
-                           rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss, mask_loss]
-            elif config.MODEL =='frcnn':
-                outputs = [rpn_class_logits, rpn_class, rpn_bbox,
-                           mrcnn_class_logits, mrcnn_class, mrcnn_bbox,
-                           rpn_rois, output_rois,
-                           rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss]
-            model = KM.Model(inputs, outputs, name='mask_rcnn')
-        else:
-            # Network Heads
-            # Proposal classifier and BBox regressor heads
-            # CHANGE: reduce number of classes to 2
-            # CHANGE: replaced with custom 2 class function
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
-                fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
-                                     config.POOL_SIZE, num_classes=2,
-                                     train_bn=config.TRAIN_BN, 
-                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
-
-            # Detections
-            # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in 
-            # normalized coordinates
-            detections = modellib.DetectionLayer(config, name="mrcnn_detection")(
-                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
-
-            # Create masks for detections
-            detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
-            # CHANGE: reduce number of classes to 2
-            # CHANGE: replaced with custom 2 class function
-            if config.MODEL == 'mrcnn':
-                mrcnn_mask = fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
-                                                  input_image_meta,
-                                                  config.MASK_POOL_SIZE,
-                                                  num_classes=2,
-                                                  train_bn=config.TRAIN_BN)
-            
-            # CHANGE: Added target to the input
-            inputs = [input_image, input_image_meta, input_target, input_anchors]
-            if config.MODEL == 'mrcnn':
-                outputs = [detections, mrcnn_class, mrcnn_bbox,
-                           mrcnn_mask, rpn_rois, rpn_class, rpn_bbox]
-            elif config.MODEL =='frcnn':
-                outputs = [detections, mrcnn_class, mrcnn_bbox,
-                           rpn_rois, rpn_class, rpn_bbox]
-            model = KM.Model(inputs, outputs, name='mask_rcnn')
-            
+                # Create masks for detections
+                detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
+                # CHANGE: reduce number of classes to 2
+                # CHANGE: replaced with custom 2 class function
+                if config.MODEL == 'mrcnn':
+                    mrcnn_mask = fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
+                                                      input_image_meta,
+                                                      config.MASK_POOL_SIZE,
+                                                      num_classes=2,
+                                                      train_bn=config.TRAIN_BN)
+                
+                # CHANGE: Added target to the input
+                inputs = [input_image, input_image_meta, input_target, input_anchors]
+                if config.MODEL == 'mrcnn':
+                    outputs = [detections, mrcnn_class, mrcnn_bbox,
+                               mrcnn_mask, rpn_rois, rpn_class, rpn_bbox]
+                elif config.MODEL =='frcnn':
+                    outputs = [detections, mrcnn_class, mrcnn_bbox,
+                               rpn_rois, rpn_class, rpn_bbox]
+                model = KM.Model(inputs, outputs, name='mask_rcnn')
+        
 
         # Add multi-GPU support.
         if config.GPU_COUNT > 1:
@@ -771,7 +779,9 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
             modellib.log("anchors", anchors)
         # Run object detection
         # CHANGE: Use siamese detection model
-        with graph.as_default():
+        with session.graph.as_default():
+            # with session.as_default():
+            K.set_session(session)
             detections, _, _, mrcnn_mask, _, _, _ =\
                 self.keras_model.predict([molded_images, image_metas, molded_targets, anchors], verbose=0)
         if random_detections:

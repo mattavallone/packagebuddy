@@ -19,7 +19,7 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import Image
 from packagebuddy.srv import *
 
-class SiameseMaskRCNN(object):
+class SiameseMaskRCNNPredict(object):
 	def __init__(self):
 		self.bridge = CvBridge()
 
@@ -105,6 +105,6 @@ if __name__ == '__main__':
 	rospy.init_node('siameseMaskRCNN_predict')
 
 	try:
-		yr = SiameseMaskRCNN()
+		smrcnn = SiameseMaskRCNNPredict()
 	except rospy.ROSInterruptException:
 		pass

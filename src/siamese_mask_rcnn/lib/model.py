@@ -1,5 +1,9 @@
 # Simaese Mask R-CNN Model
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import tensorflow as tf
 import glob
 import sys
@@ -498,7 +502,6 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
         if config.GPU_COUNT > 1:
             from mrcnn.parallel_model import ParallelModel
             model = ParallelModel(model, config.GPU_COUNT)
-
         return model
     
     
@@ -817,6 +820,112 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
                 "masks": final_masks,
             })
         return results
+
+    def detect_category(self, category, targets, images, verbose=0, random_detections=False, eps=1e-6):
+        """Runs the detection pipeline with extra logic for specific object characteristics.
+        images: List of images, potentially of different sizes.
+        Returns a list of dicts, one dict per image. The dict contains:
+        rois: [N, (y1, x1, y2, x2)] detection bounding boxes
+        class_ids: [N] int class IDs
+        scores: [N] float probability scores for the class IDs
+        masks: [H, W, N] instance binary masks
+        """
+        assert self.mode == "inference", "Create model in inference mode."
+        assert len(
+            images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
+
+        if verbose:
+            modellib.log("Processing {} images".format(len(images)))
+            for image in images:
+                modellib.log("image", image)
+                # CHANGE: added target to logs
+                modellib.log("target", np.stack(targets))
+
+        # Mold inputs to format expected by the neural network
+        # CHANGE: Removed moding of target -> detect expects molded target
+        # TODO!
+        molded_images, image_metas, windows = self.mold_inputs(images)
+        # molded_targets, target_metas, target_windows = self.mold_inputs(targets)
+        molded_targets = np.stack(targets)
+
+        # Validate image sizes
+        # All images in a batch MUST be of the same size
+        image_shape = molded_images[0].shape
+        for g in molded_images[1:]:
+            assert g.shape == image_shape,\
+                "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
+        # CHANGE: add size assertion for target
+        target_shape = molded_targets[0].shape
+        for g in molded_targets[1:]:
+            assert g.shape == target_shape,\
+                "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
+
+        # Anchors
+        anchors = self.get_anchors(image_shape)
+        # Duplicate across the batch dimension because Keras requires it
+        # TODO: can this be optimized to avoid duplicating the anchors?
+        anchors = np.broadcast_to(anchors, (self.config.BATCH_SIZE,) + anchors.shape)
+
+        if verbose:
+            modellib.log("molded_images", molded_images)
+#             modellib.log("image_metas", image_metas)
+            # CHANGE: add targets to log
+            modellib.log("molded_targets", molded_targets)
+#             modellib.log("target_metas", target_metas)
+            modellib.log("anchors", anchors)
+        # Run object detection
+        # CHANGE: Use siamese detection model
+        with graph.as_default():
+            with session.as_default():
+                detections, _, _, mrcnn_mask, _, _, _ =\
+                    self.keras_model.predict([molded_images, image_metas, molded_targets, anchors], verbose=0)
+        if random_detections:
+            # Randomly shift the detected boxes
+            window_limits = utils.norm_boxes(windows, (molded_images[0].shape[:2]))[0]
+            y_shifts = np.random.uniform(-detections[0,:,0] + window_limits[0], window_limits[2] - detections[0,:,2])
+            x_shifts = np.random.uniform(-detections[0,:,1] + window_limits[1], window_limits[3] - detections[0,:,3])
+            zeros    = np.zeros(detections.shape[1])
+            shifts   = np.stack([y_shifts, x_shifts, y_shifts, x_shifts, zeros, zeros], axis=-1)[np.newaxis]
+            detections = detections + shifts
+
+            # Randomly permute confidence scores
+
+            non_zero_confidences = np.where(detections[0,:,-1])[0]
+            random_perm = np.random.permutation(non_zero_confidences)
+            permuted_confidences = np.concatenate([detections[0,:,-1][:len(non_zero_confidences)][random_perm],
+                                                   np.zeros(detections.shape[1] - len(non_zero_confidences))])
+            detections = np.concatenate([detections[:,:,:-1], permuted_confidences.reshape(1, detections.shape[1], 1)], axis=-1)
+
+            # Keep the sorted order of confidence scores
+            detections = detections[:, np.argsort(-detections[0,:,-1]), :]
+        # Process detections
+        results = []
+        for i, image in enumerate(images):
+            final_rois, final_class_ids, final_scores, final_masks =\
+                self.unmold_detections(detections[i], mrcnn_mask[i],
+                                       image.shape, molded_images[i].shape,
+                                       windows[i])
+            results.append({
+                "rois": final_rois,
+                "class_ids": final_class_ids,
+                "scores": final_scores,
+                "masks": final_masks,
+            })
+
+        # Added detection logic
+        for r in results:
+            for j, roi in enumerate(r["rois"].copy()):
+                if(category == 4 or category == 6): # door or elevator
+                    # check for invalid ratio of bounding box
+                    width = abs(roi[3] - roi[1])
+                    height = abs(roi[2] - roi[0])
+                    if(width / height >= 1):
+                        r["rois"] = np.delete(r["rois"], j)
+                        r["class_ids"] = np.delete(r["class_ids"], j)
+                        r["scores"] = np.delete(r["scores"], j)
+                        r["masks"] = np.delete(r["masks"], j)
+                        
+        return results
     
     def get_imagenet_weights(self, pretraining='imagenet-1k'):
         """Selects ImageNet trained weights.
@@ -883,7 +992,7 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
         # load weights            
         self.load_weights(weights_path, by_name=True)
         self.epoch = epoch_index
-    
+
     def get_latest_checkpoint(self):
         os.path.exists(os.path.join(self.log_dir, "siamese_mrcnn_0001.h5"))
         list_of_files = glob.glob(os.path.join(self.log_dir,'*.h5')) # * means all if need specific format then *.csv

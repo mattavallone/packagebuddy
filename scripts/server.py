@@ -170,7 +170,8 @@ class SiameseMaskRCNNServer(object):
 																				min_scale=self.config.IMAGE_MIN_SCALE, 
 																				mode="square")
 				
-			outputs = self.siameseMaskRCNN.detect([ref_images], [cv_image], verbose=1)
+			# outputs = self.siameseMaskRCNN.detect([ref_images], [cv_image], verbose=1)
+			outputs = self.siameseMaskRCNN.detect_category(category=category, targets=[ref_images], images=[cv_image], verbose=1)
 
 		except SystemError:
 			pass
@@ -201,8 +202,8 @@ class SiameseMaskRCNNServer(object):
 			detection.results = results
 
 			y1, x1, y2, x2 = output['rois']
-			center.x = (x2 + x1) / 2
-			center.y = (y2 + y1) / 2
+			center.x = (x2 + x1) // 2
+			center.y = (y2 + y1) // 2
 			center.theta = 0.0
 			bbox.center = center
 

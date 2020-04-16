@@ -33,20 +33,13 @@ class SiameseMaskRCNNPredict(object):
 		self.detect_pub = rospy.Publisher('{}/detected'.format(rospy.get_name()), Detection2DArray, queue_size=1)
 		self.bounding_box_pub = rospy.Publisher('{}/bounding_box_image'.format(rospy.get_name()), Image, queue_size=1)
 
-		if self.image_type == 'rgbd':
-			self.depth_topic = rospy.get_param('~depth_image_topic', default='/camera/depth_registered/image_raw')
-			rospy.loginfo('Using depth image topic {}'.format(self.depth_topic))
-
-			self.depth_image_sub = rospy.Subscriber(self.depth_topic, Image, self._depth_cb)
-
 		# rate = rospy.Rate(30)
 		self.rgb_image = Image()
-		self.depth_image = Image()
 		
 		last_image = Image()
 		while not rospy.is_shutdown():
 			cur_img = self.rgb_image
-			cur_depth = self.depth_image
+
 			if cur_img.header.stamp != last_image.header.stamp:
 				rospy.wait_for_service('siameseMaskRCNN_detect')
 				try:
@@ -55,18 +48,14 @@ class SiameseMaskRCNNPredict(object):
 					
 					try:
 						cv_image = self.bridge.imgmsg_to_cv2(cur_img, "bgr8")
-						# cv_depth_image = self.bridge.imgmsg_to_cv2(cur_img, "16UC1")
+
 					except CvBridgeError as e:
 						rospy.logerr(e)
 					
 					if len(detected.detections) > 0:
 						# rospy.loginfo('Found {} bounding boxes'.format(len(detected.detection.detections)))
-						if self.image_type == 'rgbd':
-							for i in range(0,len(detected.detections)):
-								detected.detections[i].source_img = cur_depth
-						else:
-							for i in range(0,len(detected.detections)):
-								detected.detections[i].source_img = cur_img
+						for i in range(0,len(detected.detections)):
+							detected.detections[i].source_img = cur_img
 						self.detect_pub.publish(detected)
 					
 					image = self._draw_boxes(cv_image, detected)
@@ -79,9 +68,6 @@ class SiameseMaskRCNNPredict(object):
 	
 	def _image_cb(self, data):
 		self.rgb_image = data
-
-	def _depth_cb(self, data):
-		self.depth_image = data
 
 	def _draw_boxes(self, image, detected):
 		for detect in detected.detections:

@@ -875,10 +875,11 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
             modellib.log("anchors", anchors)
         # Run object detection
         # CHANGE: Use siamese detection model
-        with graph.as_default():
-            with session.as_default():
-                detections, _, _, mrcnn_mask, _, _, _ =\
-                    self.keras_model.predict([molded_images, image_metas, molded_targets, anchors], verbose=0)
+        with session.graph.as_default():
+            # with session.as_default():
+            K.set_session(session)
+            detections, _, _, mrcnn_mask, _, _, _ =\
+                self.keras_model.predict([molded_images, image_metas, molded_targets, anchors], verbose=0)
         if random_detections:
             # Randomly shift the detected boxes
             window_limits = utils.norm_boxes(windows, (molded_images[0].shape[:2]))[0]
@@ -915,8 +916,8 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
         # Added detection logic
         for r in results:
             for j, roi in enumerate(r["rois"].copy()):
-                if(category == 'door' or category == 'elevator'):
-                    # check for invalid ratio of bounding box
+                if(category == "door" or category == "elevator"):
+                    # check for invalid ratio of bounding box dimensions
                     width = abs(roi[3] - roi[1])
                     height = abs(roi[2] - roi[0])
                     if(width / height >= 1):

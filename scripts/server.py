@@ -42,10 +42,6 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
 
-# os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-
 # Configure the model
 class SmallEvalConfig(siamese_config.Config):
 	# Set batch size to 1 since we'll be running inference on
@@ -57,12 +53,6 @@ class SmallEvalConfig(siamese_config.Config):
 	EXPERIMENT = 'evaluation'
 	CHECKPOINT_DIR = PROJECT_PATH + 'checkpoints/'
 	NUM_TARGETS = 1
-
-	# TARGET_MAX_DIM = 192
-	# TARGET_MIN_DIM = 150
-	# IMAGE_MIN_SCALE = 1
-	# IMAGE_MIN_DIM = 480
-	# IMAGE_MAX_DIM = 640
 
 class LargeEvalConfig(siamese_config.Config):
 	# Set batch size to 1 since we'll be running inference on
@@ -155,7 +145,7 @@ class SiameseMaskRCNNServer(object):
 		# Perform inferencing
 		try:
 			# category = np.random.choice(self.categories, 1) # choose a class randomly
-			category = self.categories[3] # door
+			category = self.categories[4]
 			ref_image_list = np.random.choice(os.listdir(SUPPORT_SET + category), self.k) # use random k reference images
 			# ref_image_list = os.listdir(SUPPORT_SET + category)[:self.k-1] # use first k reference images
 			ref_images = []
@@ -170,7 +160,6 @@ class SiameseMaskRCNNServer(object):
 																				min_scale=self.config.IMAGE_MIN_SCALE, 
 																				mode="square")
 				
-			# outputs = self.siameseMaskRCNN.detect([ref_images], [cv_image], verbose=1)
 			outputs = self.siameseMaskRCNN.detect_category(category=category, targets=[ref_images], images=[cv_image], verbose=1)
 
 		except SystemError:
@@ -180,7 +169,6 @@ class SiameseMaskRCNNServer(object):
 		
 		# Create output message
 		for output in outputs:
-			print(output)
 			detection = Detection2D()
 			results = []
 			bbox = BoundingBox2D()
@@ -190,29 +178,33 @@ class SiameseMaskRCNNServer(object):
 			detection.header.stamp = rospy.get_rostime()
 			# detection.source_img = deepcopy(req.image)
 
-			scores = output['scores']
-			labels = output['class_ids']
+			try:
+				scores = output['scores']
+				labels = output['class_ids']
 
-			for i in range(0,len(labels)):
-				object_hypothesis = ObjectHypothesisWithPose()
-				object_hypothesis.id = labels[i]
-				object_hypothesis.score = scores[i]
-				results.append(object_hypothesis)
-			
-			detection.results = results
+				for i in range(0,len(labels)):
+					object_hypothesis = ObjectHypothesisWithPose()
+					object_hypothesis.id = labels[i]
+					object_hypothesis.score = scores[i]
+					results.append(object_hypothesis)
+				
+				detection.results = results
 
-			y1, x1, y2, x2 = output['rois']
-			center.x = (x2 + x1) // 2
-			center.y = (y2 + y1) // 2
-			center.theta = 0.0
-			bbox.center = center
+				y1, x1, y2, x2 = output['rois']
+				center.x = (x2 + x1) // 2
+				center.y = (y2 + y1) // 2
+				center.theta = 0.0
+				bbox.center = center
 
-			bbox.size_x = abs(x2 - x1)
-			bbox.size_y = abs(y2 - y1)
+				bbox.size_x = abs(x2 - x1)
+				bbox.size_y = abs(y2 - y1)
 
-			detection.bbox = bbox
+				detection.bbox = bbox
 
-			detections.append(detection)
+				detections.append(detection)
+
+			except SystemError:
+				continue
 
 		detection_array.header = Header()
 		detection_array.header.stamp = rospy.get_rostime()

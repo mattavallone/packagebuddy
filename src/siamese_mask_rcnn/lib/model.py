@@ -915,7 +915,7 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
         # Added detection logic
         for r in results:
             for j, roi in enumerate(r["rois"].copy()):
-                if(category == 4 or category == 6): # door or elevator
+                if(category == 'door' or category == 'elevator'):
                     # check for invalid ratio of bounding box
                     width = abs(roi[3] - roi[1])
                     height = abs(roi[2] - roi[0])

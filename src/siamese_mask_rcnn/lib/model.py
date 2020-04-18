@@ -915,17 +915,20 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
 
         # Added detection logic
         for r in results:
-            for j, roi in enumerate(r["rois"].copy()):
-                if(category == "door" or category == "elevator"):
-                    # check for invalid ratio of bounding box dimensions
+            j = 0 # counter
+            for roi in r["rois"]:
+                if(category == 4 or category == 6): # door or elevator
+                    # check for invalid ratio of bounding box
                     width = abs(roi[3] - roi[1])
                     height = abs(roi[2] - roi[0])
-                    if(width / height >= 1):
-                        r["rois"] = np.delete(r["rois"], j)
+                    if(width / height > 0.6):
+                        r["rois"] = np.delete(r["rois"], j, axis=0)
                         r["class_ids"] = np.delete(r["class_ids"], j)
                         r["scores"] = np.delete(r["scores"], j)
-                        r["masks"] = np.delete(r["masks"], j)
-                        
+                        r["masks"] = np.delete(r["masks"], j, axis=-1)
+                        j = j-2 # subtract an extra index for missing element in original array
+                j = j+1
+                
         return results
     
     def get_imagenet_weights(self, pretraining='imagenet-1k'):

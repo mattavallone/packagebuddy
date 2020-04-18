@@ -926,9 +926,9 @@ class SiameseMaskRCNN(modellib.MaskRCNN):
                         r["class_ids"] = np.delete(r["class_ids"], j)
                         r["scores"] = np.delete(r["scores"], j)
                         r["masks"] = np.delete(r["masks"], j, axis=-1)
-                        j = j-2 # subtract an extra index for missing element in original array
+                        j = j-1 # subtract an extra index for missing element in original array
                 j = j+1
-                
+
         return results
     
     def get_imagenet_weights(self, pretraining='imagenet-1k'):

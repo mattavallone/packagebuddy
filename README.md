@@ -2,6 +2,10 @@
 
 Package Buddy is a project team at New York University. The goal of the project is to design and implement a robot that can enter a building, traverse different floors, and successfully deliver a package to a given room. The robot has no prior knowledge of the building floor plans, nor access to GPS signal. It must rely solely on onboard sensors, including camera vision, ultrasonic range sensors, depth sensor, an IMU, and odometry measurements. It can use a speaker to send auditory messages to humans around it, if it needs assistance with something (e.g. opening a door). The team must integrate hardware and create software to perform five main robot tasks. 
 
+![alt text][robot]
+
+[robot]: https://github.com/mattavallone/packagebuddy/images/packagebuddy.png "Package Buddy"
+
 ## Tasks
 |         Robot Tasks           |
 |:--------------------------|
@@ -16,10 +20,10 @@ There are several milestones for the project, each building upon the prior with 
 
 | Number of Robots	| Objects	| Number of Floors|
 |:-------------------:|:---------:|:-----------------:|
-|One | Static | One |
-|One | Static & Dynamic | One |
-|One | Static & Dynamic | Two |
-|Multiple | Static & Dynamic | Two |
+|One | Stationary | One |
+|One | Moving | One |
+|One | Moving | Two |
+|Multiple | Moving | Two |
 
 ## Application
 The main application of Package Buddy would be in the logistics and transportation sector.  Companies like UPS and FedEx are investing millions of dollars into AVs in order to reduce costs and meet demands of the 21st century supply chain.  Other companies, like Dominos and Amazon, are using robots to bring products straight to people’s doorsteps.  Currently, indoor deliveries require a human to bring the parcel directly to the correct location inside the building.  Mail carriers may need special access to these places, creating possible security vulnerabilities.  Delivering packages one-by-one also lacks efficiency.  This makes shipping times longer and slows down progress.
@@ -50,3 +54,10 @@ Set up a catkin workspace with the following packages. Update the launch file fo
 * realsense-ros
 * cv_camera
 * rosserial
+
+#### Python Libraries Used
+Requires TensorFlow 1.x
+
+```
+sudo pip install numpy==1.14.1 cython scikit_image==0.13.1 keras==2.1.6 h5py imgaug opencv_python
+```

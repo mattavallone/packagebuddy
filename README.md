@@ -4,7 +4,7 @@ Package Buddy is a project team at New York University. The goal of the project 
 
 ![alt text][robot]
 
-[robot]: https://github.com/mattavallone/packagebuddy/images/packagebuddy.png "Package Buddy"
+[robot]: https://github.com/mattavallone/packagebuddy/blob/master/images/packagebuddy.png "Package Buddy"
 
 ## Tasks
 |         Robot Tasks           |
